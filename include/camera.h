@@ -14,7 +14,7 @@ public:
         timerShake.setOneShot(true);
         timerShake.setOnTimeout([&]()
             {
-                isShaking = false;reset();
+                isShaking_ = false;reset();
             });
     }
     ~Camera() = default;
@@ -32,15 +32,16 @@ public:
     void onUpdate(float delta)
     {
         timerShake.onUpdate(delta);
-        if (isShaking)
+        if (isShaking_)
         {
             position.x = ((-50 + rand() % 100) / 2.0f * shakingStrength);
             position.y = ((-50 + rand() % 100) / 2.0f * shakingStrength);
         }
     }
+    bool isShaking() const { return isShaking_; }
     void shake(float strength, float duration)
     {
-        isShaking = true;
+        isShaking_ = true;
         shakingStrength = strength;
         timerShake.setWaitTime(duration);
         timerShake.restart();
@@ -58,7 +59,7 @@ public:
 private:
     Vector2 position;
     Timer timerShake;
-    bool isShaking = false;
+    bool isShaking_ = false;
     float shakingStrength = 0;
     SDL_Renderer* renderer = nullptr;
 };

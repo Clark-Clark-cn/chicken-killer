@@ -53,9 +53,17 @@ public:
         x /= val;
         y /= val;
     }   
+    bool operator==(const Vector2& vec) const
+    {
+        return x - vec.x < 0.1f && y - vec.y < 0.1f;
+    }
     float length() 
     {
         return std::sqrt(x * x + y * y);
+    }
+    float distance(const Vector2& vec) const
+    {
+        return (*this - vec).length();
     }
 
     Vector2 normalized() 

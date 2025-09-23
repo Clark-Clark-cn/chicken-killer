@@ -54,4 +54,4 @@ private:
     bool isValid = true;
     float speed = 800.0f;
 };
-extern std::vector<Bullet> bulletsList;
+extern std::vector<Bullet> bullets;

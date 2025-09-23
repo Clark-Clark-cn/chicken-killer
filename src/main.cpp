@@ -7,6 +7,7 @@
 #include"chicken_medium.h"
 #include"chicken_slow.h"
 #include "battery.h"
+#include "boom.h"
 
 #include <SDL.h>
 #include <SDL_ttf.h>
@@ -19,15 +20,21 @@
 #include<vector>
 #include<algorithm>
 #include<iostream>
+#include <statusBar.h>
 
 
 Camera* camera = nullptr;
 Battery* Battery::instance = nullptr;
+StatusBar* StatusBar::instance = nullptr;
+std::vector<Boom*> booms;
 
 SDL_Window* window = nullptr;
 SDL_Renderer* renderer = nullptr;
+const int LOGICAL_WIDTH = 1280;
+const int LOGICAL_HEIGHT = 720;
 
 bool isQuit = false;    //是否退出程序
+bool isDebug = false;   //是否开启调试模式
 
 SDL_Texture* texHeart = nullptr;     //生命值图标纹理
 SDL_Texture* texBullet = nullptr;     //子弹纹理
@@ -41,6 +48,8 @@ Atlas atlasChickenFast; //快速僵尸鸡图集
 Atlas atlasChickenMedium; //中速僵尸鸡图集
 Atlas atlasChickenSlow; //慢速僵尸鸡图集
 Atlas atlasExplosion;  //僵尸鸡死亡爆炸动画图集
+Atlas atlasArray; //爆炸指针动画
+Atlas atlasBoomExplode; //爆炸动画图集
 
 Mix_Music* musicBgm = nullptr; //背景音乐
 Mix_Music* musicLoss = nullptr; //游戏失败音乐
@@ -48,13 +57,12 @@ Mix_Music* musicLoss = nullptr; //游戏失败音乐
 Mix_Chunk* soundHurt = nullptr; //生命值降低音效
 Mix_Chunk* soundFire[3] = { nullptr }; //开火音效
 Mix_Chunk* soundExplosion = nullptr; //僵尸鸡死亡爆炸音效
+Mix_Chunk* soundBoom = nullptr; //炸弹爆炸音效
 
 TTF_Font* font = nullptr; //得分文本字体
 
-int hp = 10;          //生命值
-int score = 0;     //游戏得分
-std::vector<Bullet> bulletsList; //子弹列表
-std::vector<Chicken*> chickensList; //僵尸鸡列表
+std::vector<Bullet> bullets; //子弹列表
+std::vector<Chicken*> chickens; //僵尸鸡列表
 int numPerGen = 2; //每次生成僵尸鸡数量
 Timer timerGenerate; //生成僵尸鸡定时器
 Timer timerIncreaseNumPerGen;    //增加生成僵尸鸡数量定时器
@@ -89,9 +97,10 @@ void init()
 
     window = SDL_CreateWindow("Zombie Chicken Killer",
         SDL_WINDOWPOS_CENTERED, SDL_WINDOWPOS_CENTERED,
-        1280, 720, SDL_WINDOW_SHOWN);
+        1280, 720, SDL_WINDOW_SHOWN | SDL_WINDOW_RESIZABLE);
 
     renderer = SDL_CreateRenderer(window, -1, SDL_RENDERER_ACCELERATED);
+    SDL_RenderSetLogicalSize(renderer, LOGICAL_WIDTH, LOGICAL_HEIGHT);
 
     SDL_ShowCursor(SDL_DISABLE);
 
@@ -114,7 +123,7 @@ void init()
                 else    //20%
                     chicken = new ChickenFast();
 
-                chickensList.push_back(chicken);
+                chickens.push_back(chicken);
             }
         });
     timerIncreaseNumPerGen.setOneShot(false);
@@ -147,7 +156,7 @@ void loadResources()
     texHeart = IMG_LoadTexture(renderer, "res/heart.png");
     texBullet = IMG_LoadTexture(renderer, "res/bullet.png");
     texbattery = IMG_LoadTexture(renderer, "res/battery.png");
-    texCrosshair = IMG_LoadTexture(renderer, "res/crosshair.png");
+    texCrosshair = IMG_LoadTexture(renderer, "res/crosshair1.png");
     texBackground = IMG_LoadTexture(renderer, "res/background.png");
     texBarrelIdle = IMG_LoadTexture(renderer, "res/barrel_idle.png");
 
@@ -156,6 +165,8 @@ void loadResources()
     atlasChickenMedium.load("res/chicken_medium_%d.png", 6);
     atlasChickenSlow.load("res/chicken_slow_%d.png", 8);
     atlasExplosion.load("res/explosion_%d.png", 5);
+    atlasBoomExplode.load("res/boom_explode_%d.png", 5);
+    atlasArray.load("res/crosshair%d.png",2);
 
     musicBgm = Mix_LoadMUS("res/bgm.mp3");
     musicLoss = Mix_LoadMUS("res/loss.mp3");
@@ -165,6 +176,7 @@ void loadResources()
     soundFire[1] = Mix_LoadWAV("res/fire_2.wav");
     soundFire[2] = Mix_LoadWAV("res/fire_3.wav");
     soundExplosion = Mix_LoadWAV("res/explosion.wav");
+    soundBoom = Mix_LoadWAV("res/boom.mp3");
 
     font = TTF_OpenFont("res/font.ttf", 28);
 }
@@ -187,6 +199,7 @@ void unloadResources()
     Mix_FreeChunk(soundFire[1]);
     Mix_FreeChunk(soundFire[2]);
     Mix_FreeChunk(soundExplosion);
+    Mix_FreeChunk(soundBoom);
 }
 
 void mainLoop()
@@ -209,8 +222,16 @@ void mainLoop()
                 posCrosshair.x = (float)event.motion.x;
                 posCrosshair.y = (float)event.motion.y;
                 break;
+            case SDL_KEYDOWN:
+                if (event.key.keysym.sym == SDLK_ESCAPE)
+                    isQuit = true;
+                else if (event.key.keysym.sym == SDLK_F1)
+                    isDebug = !isDebug;
+                else if (event.key.keysym.sym == SDLK_F11)
+                    SDL_SetWindowFullscreen(window, SDL_GetWindowFlags(window) & SDL_WINDOW_FULLSCREEN ? 0 : SDL_WINDOW_FULLSCREEN);
             }
             Battery::getInstance()->input(event);
+            StatusBar::getInstance()->input(event);
         }
         steady_clock::time_point frameStart = steady_clock::now();
         duration<float>delta = duration<float>(frameStart - lastTick);
@@ -234,13 +255,13 @@ void onUpdate(float delta)
     timerIncreaseNumPerGen.onUpdate(delta);
 
     //更新子弹列表
-    for (Bullet& bullet : bulletsList)
+    for (Bullet& bullet : bullets)
         bullet.onUpdate(delta);
     //更新僵尸鸡对象并处理子弹碰撞
-    for (Chicken* chicken : chickensList)
+    for (Chicken* chicken : chickens)
     {
         chicken->onUpdate(delta);
-        for (Bullet& bullet : bulletsList)
+        for (Bullet& bullet : bullets)
         {
             if (!chicken->checkAlive() || bullet.canRemove()) continue;
 
@@ -252,7 +273,7 @@ void onUpdate(float delta)
                 && posBullet.y >= posChicken.y - sizeChicken.y / 2
                 && posBullet.y <= posChicken.y + sizeChicken.y / 2)
             {
-                score += 1;
+                StatusBar::getInstance()->increaseScore(1);
                 bullet.onHit();
                 chicken->onHurt();
             }
@@ -261,33 +282,33 @@ void onUpdate(float delta)
         if (!chicken->checkAlive()) continue;
 
         //漏网之鸡减少剩余生命值
-        if (chicken->getPosition().y > 720)
+        if (chicken->getPosition().y > LOGICAL_HEIGHT)
         {
             chicken->makeInvalid();
             Mix_PlayChannel(-1, soundHurt, 0);
-            hp -= 1;
+            StatusBar::getInstance()->decreaseHP(1);
         }
         //移除无效的子弹对象
-        bulletsList.erase(std::remove_if(bulletsList.begin(), bulletsList.end(),
+        bullets.erase(std::remove_if(bullets.begin(), bullets.end(),
             [](const Bullet& bullet)
             {
                 return bullet.canRemove();
             }),
-            bulletsList.end());
+            bullets.end());
 
 
         //移除无效的僵尸鸡对象
-        chickensList.erase(std::remove_if(chickensList.begin(), chickensList.end(),
+        chickens.erase(std::remove_if(chickens.begin(), chickens.end(),
             [](const Chicken* chicken)
             {
                 bool canRemove = chicken->canRemove();
                 if (canRemove)delete chicken;
                 return canRemove;
             }),
-            chickensList.end());
+            chickens.end());
 
         //对场景中的僵尸鸡按竖直坐标位置排序
-        std::sort(chickensList.begin(), chickensList.end(),
+        std::sort(chickens.begin(), chickens.end(),
             [](const Chicken* chicken_1, const Chicken* chicken_2)
             {
                 return chicken_1->getPosition().y < chicken_2->getPosition().y;
@@ -295,18 +316,10 @@ void onUpdate(float delta)
     }
 
     Battery::getInstance()->update(delta);
+    StatusBar::getInstance()->update(delta);
+    Boom::updateAll(delta);
     //更新摄像机位置
     camera->onUpdate(delta);
-
-    //检查游戏是否结束
-    if (hp <= 0)
-    {
-        isQuit = true;
-        Mix_HaltMusic();
-        Mix_PlayMusic(musicLoss, 0);
-        std::string msg = "游戏最终得分：" + std::to_string(score);
-        SDL_ShowSimpleMessageBox(SDL_MESSAGEBOX_INFORMATION, "游戏结束", msg.c_str(), window);
-    }
 }
 void onRender(const Camera& camera)
 {
@@ -315,64 +328,35 @@ void onRender(const Camera& camera)
         int width_bg, height_bg;
         SDL_QueryTexture(texBackground, nullptr, nullptr, &width_bg, &height_bg);
         const SDL_FRect rectDst = {
-            (1280 - width_bg) / 2.f,
-            (720 - height_bg) / 2.f,
+            (LOGICAL_WIDTH - width_bg) / 2.f,
+            (LOGICAL_HEIGHT - height_bg) / 2.f,
             (float)width_bg,
             (float)height_bg
         };
         camera.renderTexture(texBackground, nullptr, &rectDst, 0, nullptr);
 
         //绘制僵尸鸡对象
-        for (Chicken* chicken : chickensList)
+        for (Chicken* chicken : chickens)
             chicken->onRender(camera);
 
         //绘制子弹
-        for (const Bullet& bullet : bulletsList)
+        for (const Bullet& bullet : bullets)
             bullet.onRender(camera);
 
         Battery::getInstance()->draw(camera);
+        StatusBar::getInstance()->draw(renderer);
+        Boom::drawAll();
+        //绘制准星
         {
-            //绘制生命值
-            {
-                int widthHeart, heightHeart;
-                SDL_QueryTexture(texHeart, nullptr, nullptr, &widthHeart, &heightHeart);
-                for (int i = 0; i < hp; i++)
-                {
-                    const SDL_Rect rectDst = { 15 + (widthHeart + 10) * i, 15, widthHeart, heightHeart };
-
-                    SDL_RenderCopy(renderer, texHeart, nullptr, &rectDst);
-                }
-            }
-
-            //绘制游戏得分
-            {
-                std::string strScore = "Score:" + std::to_string(score);
-                SDL_Surface* sufScoreBg = TTF_RenderUTF8_Blended(font, strScore.c_str(), { 55,55,55,255 });
-                SDL_Surface* sufScoreFg = TTF_RenderUTF8_Blended(font, strScore.c_str(), { 255,255,255,255 });
-                SDL_Texture* texScoreBg = SDL_CreateTextureFromSurface(renderer, sufScoreBg);
-                SDL_Texture* texScoreFg = SDL_CreateTextureFromSurface(renderer, sufScoreFg);
-                SDL_Rect rectDstScore = { 1280 - sufScoreBg->w - 15,15,sufScoreBg->w,sufScoreBg->h };
-                SDL_RenderCopy(renderer, texScoreBg, nullptr, &rectDstScore);
-                rectDstScore.x -= 2, rectDstScore.y -= 2;
-                SDL_RenderCopy(renderer, texScoreFg, nullptr, &rectDstScore);
-                SDL_DestroyTexture(texScoreBg);
-                SDL_DestroyTexture(texScoreFg);
-                SDL_FreeSurface(sufScoreBg);
-                SDL_FreeSurface(sufScoreFg);
-            }
-
-            //绘制准星
-            {
-                int width_crosshair, height_crosshair;
-                SDL_QueryTexture(texCrosshair, nullptr, nullptr, &width_crosshair, &height_crosshair);
-                const SDL_FRect rectDst = {
-                    posCrosshair.x - width_crosshair / 2.f,
-                    posCrosshair.y - height_crosshair / 2.f,
-                    (float)width_crosshair,
-                    (float)height_crosshair
-                };
-                camera.renderTexture(texCrosshair, nullptr, &rectDst, 0, nullptr);
-            }
+            int width_crosshair, height_crosshair;
+            SDL_QueryTexture(texCrosshair, nullptr, nullptr, &width_crosshair, &height_crosshair);
+            const SDL_FRect rectDst = {
+                posCrosshair.x - width_crosshair / 2.f,
+                posCrosshair.y - height_crosshair / 2.f,
+                (float)width_crosshair,
+                (float)height_crosshair
+            };
+            camera.renderTexture(texCrosshair, nullptr, &rectDst, 0, nullptr);
         }
     }
 }

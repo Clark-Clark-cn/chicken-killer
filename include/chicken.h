@@ -4,10 +4,13 @@
 #include"animation.h"
 
 #include<SDL_mixer.h>
+#include <vector>
+
+class Chicken;
 
 extern Atlas  atlasExplosion;
 extern Mix_Chunk* soundExplosion;
-
+extern std::vector<Chicken*> chickens;
 class Chicken
 {
 public:
@@ -47,7 +50,6 @@ public:
     void onHurt()
     {
         isAlive = false;
-
         Mix_PlayChannel(-1, soundExplosion, 0);
     }
 
