@@ -12,6 +12,11 @@ This is a simple 2D shooting game developed using C++ and the SDL2 library. Play
 - Health decreases when: Zombie chickens reach the bottom of the screen.
 - Game over condition: Health reaches zero.
 
+## Skills
+1. Random bombing zone generation
+2. Double barrel, double firing rate
+3. Restore health
+
 ## Installation and Running
 1. Clone the repository locally
 2. Ensure CMake and Vcpkg are installed
