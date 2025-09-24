@@ -144,7 +144,12 @@ jobs:
           key: ${{ runner.os }}-${{ matrix.arch }}-${{ hashFiles('**/vcpkg.json') }}
           restore-keys: |
             vcpkg-${{ runner.os }}-${{ matrix.arch }}-${{ hashFiles('**/vcpkg.json') }}
-
+      - name: Update vcpkg
+        if: runner.os != 'Windows'
+        run: |
+          cd /usr/local/share/vcpkg
+          sudo git fetch --all --tags
+          sudo git pull
       - name: install Ninja
         if: runner.os == 'Windows'
         run: |
