@@ -1,0 +1,219 @@
+name: build
+
+on:
+  push:
+    branches:
+      - main
+  pull_request:
+    branches:
+      - main
+  workflow_dispatch:
+
+jobs:
+  build:
+    runs-on: ${{ matrix.os }}
+
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: windows-latest
+            arch: x64
+            c_compiler: cl
+            cpp_compiler: cl
+            vcpkg_triplet: x64-windows-static-release
+          - os: windows-11-arm
+            arch: arm64
+            c_compiler: cl
+            cpp_compiler: cl
+            vcpkg_triplet: arm64-windows-static-release
+          - os: windows-latest
+            arch: x86
+            c_compiler: cl
+            cpp_compiler: cl
+            vcpkg_triplet: x86-windows-static
+          - os: ubuntu-latest
+            arch: x64-gcc
+            c_compiler: gcc
+            cpp_compiler: g++
+            vcpkg_triplet: x64-linux-release
+          - os: ubuntu-latest
+            arch: x64
+            c_compiler: clang
+            cpp_compiler: clang++
+            vcpkg_triplet: x64-linux-release
+          - os: macos-13
+            arch: x64
+            c_compiler: clang
+            cpp_compiler: clang++
+            vcpkg_triplet: x64-osx-release
+          - os: macos-latest
+            arch: arm64
+            c_compiler: clang
+            cpp_compiler: clang++
+            vcpkg_triplet: arm64-osx-release
+    env:
+      VCPKG_TARGET_TRIPLET: ${{ matrix.vcpkg_triplet }}
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          submodules: true
+      - name: setup MSVC
+        if: runner.os == 'Windows'
+        uses: ilammy/msvc-dev-cmd@v1
+        with:
+          arch: ${{ matrix.arch }}
+      - name: Setup build environment
+        shell: bash
+        run: |
+          if [[ "${{ runner.os }}" == "Linux" ]]; then
+            # 更新包管理器
+            sudo apt-get update
+            
+            # 安装基础构建工具
+            sudo apt-get install -y \
+              build-essential \
+              cmake \
+              ninja-build \
+              pkg-config \
+              git \
+              curl \
+              zip \
+              unzip \
+              tar \
+              gcc-multilib \
+              g++-multilib \
+            
+            # 安装多媒体相关工具
+            sudo apt-get install -y \
+              nasm \
+              yasm
+            
+            # 安装 autotools 套件
+            sudo apt-get install -y \
+              autoconf \
+              automake \
+              autotools-dev \
+              libtool \
+              libltdl-dev \
+              gettext \
+              flex \
+              bison \
+              gperf
+            
+            # 安装开发库
+            sudo apt-get install -y \
+              libx11-dev \
+              libxrandr-dev \
+              libxinerama-dev \
+              libxcursor-dev \
+              libxi-dev \
+              libgl1-mesa-dev \
+              libasound2-dev \
+              python3-dev \
+              python3-setuptools \
+              libibus-1.0-dev \
+              libwayland-dev libxkbcommon-dev libegl1-mesa-dev \
+              libx11-dev libxft-dev libxext-dev libminizip-dev
+              
+          elif [[ "${{ runner.os }}" == "macOS" ]]; then
+            brew install \
+              nasm \
+              yasm \
+              ninja \
+              autoconf \
+              automake \
+              libtool \
+              gettext \
+              pkg-config
+          elif [[ "${{ runner.os }}" == "Windows" ]]; then
+            # Windows 通常不需要额外安装，但可以安装 Ninja 作为备选
+            choco install ninja -y || true
+            # 确保 7zip 可用
+            choco install 7zip -y
+            # 添加到 PATH
+            echo "C:\Program Files\7-Zip" >> $GITHUB_PATH
+          fi
+      - name: Cache
+        uses: actions/cache@v4
+        with:
+          path: |
+            ${{ github.workspace }}/build/vcpkg_installed
+          key: ${{ runner.os }}-${{ matrix.arch }}-${{ hashFiles('**/vcpkg.json') }}
+          restore-keys: |
+            vcpkg-${{ runner.os }}-${{ matrix.arch }}-${{ hashFiles('**/vcpkg.json') }}
+
+      - name: install Ninja
+        if: runner.os == 'Windows'
+        run: |
+          choco install ninja --yes
+
+      - name: Update vcpkg
+        if: runner.os != 'Windows'
+        run: sudo git -C /usr/local/share/vcpkg fetch --all --tags
+
+      - name:  Configure CMake
+        shell: bash
+        run: |
+          cmake -B build -S . \
+            -DCMAKE_BUILD_TYPE=Release \
+            -DCMAKE_C_COMPILER=${{ matrix.c_compiler }} \
+            -DCMAKE_CXX_COMPILER=${{ matrix.cpp_compiler }} \
+            -DVCPKG_TARGET_TRIPLET=${{ env.VCPKG_TARGET_TRIPLET }} \
+            -G Ninja
+
+      - name: Build
+        shell: bash
+        run: |
+          cmake --build build --config Release --parallel 4
+
+      - name:  pack
+        shell: bash
+        run: |
+          mkdir -p ${{ github.workspace }}/temp
+          cp -r build/bin* ${{ github.workspace }}/temp
+          cd ${{ github.workspace }}/temp
+          ls -la
+          tar -czvf ~/Chicken_killer_${{ matrix.arch }}_${{ matrix.os }}.tar.gz *
+          if command -v zip > /dev/null; then
+            zip -r ~/Chicken_killer_${{ matrix.arch }}_${{ matrix.os }}.zip *
+          elif command -v 7z > /dev/null; then
+            7z a ~/Chicken_killer_${{ matrix.arch }}_${{ matrix.os }}.zip *
+          else
+            powershell -Command "Compress-Archive -Path * -DestinationPath ~/Chicken_killer_${{ matrix.arch }}_${{ matrix.os }}.zip"
+          fi
+
+      - name: Upload Artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: Chicken_killer_${{ matrix.arch }}_${{ matrix.os }}
+          path: |
+            ~/Chicken_killer_${{ matrix.arch }}_${{ matrix.os }}.tar.gz
+            ~/Chicken_killer_${{ matrix.arch }}_${{ matrix.os }}.zip
+          retention-days: 30
+
+      - name: prepare-release
+        run: |
+          cp ~/Chicken_killer_${{ matrix.arch }}_${{ matrix.os }}.tar.gz "${{ github.workspace }}/Chicken_killer_${{ matrix.arch }}_${{ matrix.os }}.tar.gz" || true
+          cp ~/Chicken_killer_${{ matrix.arch }}_${{ matrix.os }}.zip "${{ github.workspace }}/Chicken_killer_${{ matrix.arch }}_${{ matrix.os }}.zip" || true
+
+      - name: Create Release
+        id: create_release
+        uses: softprops/action-gh-release@v2.0.8
+        with:
+          files: |
+            ${{ github.workspace }}/Chicken_killer_${{ matrix.arch }}_${{ matrix.os }}.tar.gz
+            ${{ github.workspace }}/Chicken_killer_${{ matrix.arch }}_${{ matrix.os }}.zip
+          prerelease: true
+          make_latest: false
+          name: "Release action ${{ github.ref_name }}"
+          body: |
+            This is a pre-release form github actions.
+            - commit: ${{ github.sha }}
+            - author: ${{ github.actor }}
+            - changes: ${{ github.event.head_commit.message }}
+          tag_name: action_${{ github.ref_name }}
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

@@ -1,4 +1,3 @@
-#define SDL_MAIN_HANDLED
 #include  "atlas.h"
 #include "camera.h"
 #include "bullet.h"
@@ -78,7 +77,7 @@ void onUpdate(float delta); //游戏逻辑更新
 void onRender(const Camera& camera);          //画面渲染
 void mainLoop();          //游戏主循环
 
-int main(int argc, char* argv)
+int main(int argc, char* argv[])
 {
     init();
     mainLoop();
