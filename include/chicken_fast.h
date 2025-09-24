@@ -1,5 +1,6 @@
 #pragma once
 #include "chicken.h"
+#include "config.h"
 
 extern Atlas  atlasChickenFast;
 
@@ -10,7 +11,7 @@ public:
     ChickenFast()
     {
         animationRun.addFrame(&atlasChickenFast);
-        speedRun = 80.0f;
+        speedRun = Config::getInstance()->get("chicken.speed.fast");
     }
     ~ChickenFast() = default;
 };

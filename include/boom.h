@@ -8,6 +8,7 @@
 #include "animation.h"
 #include "chicken.h"
 #include "statusBar.h"
+#include "config.h"
 
 class Boom;
 extern Camera* camera;
@@ -45,20 +46,22 @@ class Boom
 public:
     Boom(){
         sizeArray = {38,38};
-        sizeExplode = {192,192};
+        sizeExplode = Config::getInstance()->get("boom.size");
         timerExplode.setWaitTime(1.0f);
         timerExplode.setOneShot(true);
         timerExplode.setOnTimeout([&]() {
             Mix_PlayChannel(-1, soundBoom, 0);
             isExplode=true;
             killChickens();
-            camera->shake(5,0.1f);
+            static const float shakeStrength = Config::getInstance()->get("boom.shake.strength");
+            static const float shakeTime = Config::getInstance()->get("boom.shake.time");
+            camera->shake(shakeStrength, shakeTime);
         });
         animationArray.setLoop(true);
         animationArray.setInterval(0.3f);
         animationArray.addFrame(&atlasArray);
         animationExplode.setLoop(false);
-        animationExplode.setInterval(1.1f);
+        animationExplode.setInterval(0.1f);
         animationExplode.addFrame(&atlasBoomExplode);
         animationExplode.setOnFinished([&]() {
             canRemove = true;
@@ -70,7 +73,7 @@ public:
         booms.emplace_back(new Boom());
         Boom* boom=booms.back();
         boom->position.x = pos_aim.x;
-        boom->position.y = pos_aim.y + 600;
+        boom->position.y = pos_aim.y + Config::getInstance()->get("boom.offset").asInt();
         boom->pos_aim = pos_aim;
         return boom;
     }
@@ -78,9 +81,11 @@ public:
     void setPosition(const Vector2& pos) { position = pos; }
     void onUpdate(float delta)
     {
+        static float speedRatio = Config::getInstance()->get("boom.speedRatio");
         if(!isReached){
             position += velocity * delta;
-            velocity.y = position.y > pos_aim.y ? -(position.y - pos_aim.y)*2 : (pos_aim.y-position.y)*2;
+            velocity.y = position.y > pos_aim.y ? 
+            -(position.y - pos_aim.y)*speedRatio : (pos_aim.y-position.y)*speedRatio;
             velocity.x = (pos_aim.x - position.x);
             if(velocity.y>-0.03f)position=pos_aim;
         }

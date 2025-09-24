@@ -35,7 +35,7 @@ class Battery{
             });
         animationBarrelFire.setPosition({ 718, 610 });
         timerDoubleFire.setOneShot(true);
-        timerDoubleFire.setWaitTime(5.0f);
+        timerDoubleFire.setWaitTime(Config::getInstance()->get("battery.time.doubleFire"));
         timerDoubleFire.setOnTimeout([&]()
             {
                 isDoubleFire = false;
@@ -74,7 +74,9 @@ public:
     void update(float delta){
         if(!isCoolDown){
             animationBarrelFire.onUpdate(delta);
-            if(!camera->isShaking())camera->shake(0.25f, 0.1f);
+            static const float shakeStrength = Config::getInstance()->get("battery.shake.strength");
+            static const float shakeTime = Config::getInstance()->get("battery.time.shake");
+            if(!camera->isShaking())camera->shake(shakeStrength, shakeTime);
         }
         if(isCoolDown && isFireKeyDown){
             animationBarrelFire.reset();
@@ -161,7 +163,8 @@ public:
 
         bullets.emplace_back(angleBarrel);      //构造新的子弹对象
         Bullet& bullet = bullets.back();
-        double angleBullet = angleBarrel + (rand() % 30 - 15);   //在30度范围内随机偏移
+        static const int bulletOffset = Config::getInstance()->get("battery.offset.ratio");
+        double angleBullet = angleBarrel + (rand() % bulletOffset - bulletOffset/2);   //在30度范围内随机偏移
         double radians = angleBullet * 3.14159265 / 180.0;
         bullet.setPosition(posBarrelCenter +
             Vector2{ (float)std::cos(radians) * lengthBarrel,

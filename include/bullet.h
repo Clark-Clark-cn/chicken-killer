@@ -2,6 +2,7 @@
 #include"camera.h"
 #include"vector2.h"
 #include<SDL.h>
+#include "config.h"
 
 extern SDL_Texture* texBullet;
 
@@ -52,6 +53,6 @@ private:
     Vector2 position;
     Vector2 velocity;
     bool isValid = true;
-    float speed = 800.0f;
+    float speed = Config::getInstance()->get("bullet.speed");
 };
 extern std::vector<Bullet> bullets;

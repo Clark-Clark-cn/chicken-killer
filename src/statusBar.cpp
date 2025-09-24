@@ -1,6 +1,7 @@
 #include "statusBar.h"
 #include "boom.h"
 #include "battery.h"
+#include "config.h"
 
 void StatusBar::update(float delta){
     //检查游戏是否结束
@@ -9,12 +10,18 @@ void StatusBar::update(float delta){
         isQuit = true;
         Mix_HaltMusic();
         Mix_PlayMusic(musicLoss, 0);
-        std::string msg = "游戏最终得分：" + std::to_string(score);
-        SDL_ShowSimpleMessageBox(SDL_MESSAGEBOX_INFORMATION, "游戏结束", msg.c_str(), nullptr);
+        std::string msg = "Final Score: " + std::to_string(score);
+        SDL_ShowSimpleMessageBox(SDL_MESSAGEBOX_INFORMATION, "Game Over", msg.c_str(), nullptr);
     }
-    if(mp >= 100){
-        mp = 100;
+    if(mp >= max_mp){
+        mp = max_mp;
     }
+}
+
+void StatusBar::increaseScore(int val) {
+    score += val; 
+    if (score < 0) score = 0; 
+    increaseMP(Config::getInstance()->get("status.mpPerHit")); 
 }
 
 void StatusBar::draw(SDL_Renderer* renderer){
@@ -31,28 +38,31 @@ void StatusBar::draw(SDL_Renderer* renderer){
     const SDL_Rect rectBg = { 15, 15 + heightHeart + 10, mpWidth, mpHeight };
     SDL_SetRenderDrawColor(renderer, 55, 55, 55, 255);
     SDL_RenderFillRect(renderer, &rectBg);
-    const SDL_Rect rectFg = { 15, 15 + heightHeart + 10, mp * mpWidth / 100, mpHeight };
+    const SDL_Rect rectFg = { 15, 15 + heightHeart + 10, mp * mpWidth / max_mp, mpHeight };
     SDL_SetRenderDrawColor(renderer, 55, 30, 255, 255);
     SDL_RenderFillRect(renderer, &rectFg);
 
-    std::string strScore = "Score:" + std::to_string(score);
+    static const SDL_Color selectedColor = Config::getInstance()->get("status.text.selectedColor").asColor();
+    static const SDL_Color normalColor = Config::getInstance()->get("status.text.normalColor").asColor();
+
+    std::string strScore = Config::getInstance()->get("status.text.score").asString() + std::to_string(score);
     drawText(renderer, strScore, {1278.0f, 30.0f}, font, {55, 55, 55, 255});
-    drawText(renderer, strScore, {1280.0f, 32.0f}, font, {255, 255, 255, 255});
+    drawText(renderer, strScore, {1280.0f, 32.0f}, font, normalColor);
 
-    std::string skill1 = "Skill: Bombing (100 MP)";
+    std::string skill1 = Config::getInstance()->get("status.text.skill1").asString();
     drawText(renderer, skill1, {1278.0f, 60.0f}, font, {55, 55, 55, 255});
-    if(skillType != SkillType::Bombing)drawText(renderer, skill1, {1280.0f, 62.0f}, font, {255, 255, 255, 255});
-    else drawText(renderer, skill1, {1280.0f, 62.0f}, font, {50, 255, 50, 255});
+    if(skillType != SkillType::Bombing)drawText(renderer, skill1, {1280.0f, 62.0f}, font, normalColor);
+    else drawText(renderer, skill1, {1280.0f, 62.0f}, font, selectedColor);
 
-    std::string skill2 = "Skill: doubleFire! (50 MP)";
+    std::string skill2 = Config::getInstance()->get("status.text.skill2").asString();
     drawText(renderer, skill2, {1278.0f, 90.0f}, font, {55, 55, 55, 255});
-    if(skillType != SkillType::DoubleFire)drawText(renderer, skill2, {1280.0f, 92.0f}, font, {255, 255, 255, 255});
-    else drawText(renderer, skill2, {1280.0f, 92.0f}, font, {50, 255, 50, 255});
+    if(skillType != SkillType::DoubleFire)drawText(renderer, skill2, {1280.0f, 92.0f}, font, normalColor);
+    else drawText(renderer, skill2, {1280.0f, 92.0f}, font, selectedColor);
 
-    std::string skill3 = "Skill: Heal (30 MP)";
+    std::string skill3 = Config::getInstance()->get("status.text.skill3").asString();
     drawText(renderer, skill3, {1278.0f, 120.0f}, font, {55, 55, 55, 255});
-    if(skillType != SkillType::Heal)drawText(renderer, skill3, {1280.0f, 122.0f}, font, {255, 255, 255, 255});
-    else drawText(renderer, skill3, {1280.0f, 122.0f}, font, {50, 255, 50, 255});
+    if(skillType != SkillType::Heal)drawText(renderer, skill3, {1280.0f, 122.0f}, font, normalColor);
+    else drawText(renderer, skill3, {1280.0f, 122.0f}, font, selectedColor);
 }
 
 void StatusBar::drawText(SDL_Renderer* renderer, const std::string& text, Vector2 position, TTF_Font* font, SDL_Color color){
@@ -65,25 +75,38 @@ void StatusBar::drawText(SDL_Renderer* renderer, const std::string& text, Vector
 }
 
 void StatusBar::Bomb(){
-    if (mp >= 100)
+    static const int mpCost = Config::getInstance()->get("status.skill.bombing.mpCost");
+    static const int count = Config::getInstance()->get("status.skill.bombing.count");
+    if (mp >= mpCost)
     {
-        mp -= 100;
-        if (mp < 0) mp = 0;
-        for(int i=0;i<5;i++)
+        mp -= mpCost;
+        for(int i=0;i<count;i++)
             Boom::create({ rand() % 1000 + 100.0f, rand() % 400 + 100.0f });
     }
 }
 
 void StatusBar::DoubleFire(){
-    if (mp >= 50)
+    static const int mpCost = Config::getInstance()->get("status.skill.doubleFire.mpCost");
+    if (mp >= mpCost)
     {
-        mp -= 50;
-        if (mp < 0) mp = 0;
+        mp -= mpCost;
         Battery::getInstance()->setDoubleFire(true);
     }
 }
 
+void StatusBar::Heal(){
+    static const int mpCost = Config::getInstance()->get("status.skill.heal.mpCost");
+    if (mp >= mpCost && hp < max_hp)
+    {
+        mp -= mpCost;
+        hp++;
+    }
+}
+
 void StatusBar::input(SDL_Event& event){
+    static const int key1 = Config::getInstance()->get("keybind.skill1");
+    static const int key2 = Config::getInstance()->get("keybind.skill2");
+    static const int key3 = Config::getInstance()->get("keybind.skill3");
     switch(event.type){
         case SDL_MOUSEWHEEL:
             if(event.wheel.y > 0){
@@ -114,13 +137,13 @@ void StatusBar::input(SDL_Event& event){
             }
         }break;
         case SDL_KEYDOWN:
-            if(event.key.keysym.sym == SDLK_1){
+            if(event.key.keysym.sym == key1){
                 skillType = SkillType::Bombing;
             }
-            else if(event.key.keysym.sym == SDLK_2){
+            else if(event.key.keysym.sym == key2){
                 skillType = SkillType::DoubleFire;
             }
-            else if(event.key.keysym.sym == SDLK_3){
+            else if(event.key.keysym.sym == key3){
                 skillType = SkillType::Heal;
             }
             break;

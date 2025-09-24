@@ -8,6 +8,7 @@
 #include"chicken_slow.h"
 #include "battery.h"
 #include "boom.h"
+#include "config.h"
 
 #include <SDL.h>
 #include <SDL_ttf.h>
@@ -30,8 +31,8 @@ std::vector<Boom*> booms;
 
 SDL_Window* window = nullptr;
 SDL_Renderer* renderer = nullptr;
-const int LOGICAL_WIDTH = 1280;
-const int LOGICAL_HEIGHT = 720;
+const int LOGICAL_WIDTH = Config::getInstance()->get("window.logical_width");
+const int LOGICAL_HEIGHT = Config::getInstance()->get("window.logical_height");
 
 bool isQuit = false;    //是否退出程序
 bool isDebug = false;   //是否开启调试模式
@@ -63,7 +64,7 @@ TTF_Font* font = nullptr; //得分文本字体
 
 std::vector<Bullet> bullets; //子弹列表
 std::vector<Chicken*> chickens; //僵尸鸡列表
-int numPerGen = 2; //每次生成僵尸鸡数量
+int numPerGen = Config::getInstance()->get("chicken.spawn.count"); //每次生成僵尸鸡数量
 Timer timerGenerate; //生成僵尸鸡定时器
 Timer timerIncreaseNumPerGen;    //增加生成僵尸鸡数量定时器
 
@@ -94,10 +95,15 @@ void init()
 
     Mix_OpenAudio(44100, MIX_DEFAULT_FORMAT, 2, 2048);
     Mix_AllocateChannels(32);
+    Mix_VolumeMusic(Config::getInstance()->get("audio.music.volume"));
+    Mix_VolumeChunk(soundHurt, Config::getInstance()->get("audio.sfx.volume"));
 
-    window = SDL_CreateWindow("Zombie Chicken Killer",
+    window = SDL_CreateWindow(
+        Config::getInstance()->get("window.title").asString().c_str(),
         SDL_WINDOWPOS_CENTERED, SDL_WINDOWPOS_CENTERED,
-        1280, 720, SDL_WINDOW_SHOWN | SDL_WINDOW_RESIZABLE);
+        Config::getInstance()->get("window.width"),
+        Config::getInstance()->get("window.height"),
+        SDL_WINDOW_SHOWN | SDL_WINDOW_RESIZABLE);
 
     renderer = SDL_CreateRenderer(window, -1, SDL_RENDERER_ACCELERATED);
     SDL_RenderSetLogicalSize(renderer, LOGICAL_WIDTH, LOGICAL_HEIGHT);
@@ -109,25 +115,27 @@ void init()
     camera = new Camera(renderer);
 
     timerGenerate.setOneShot(false);
-    timerGenerate.setWaitTime(1.5f);
+    timerGenerate.setWaitTime(Config::getInstance()->get("chicken.spawn.interval"));
+    static const int probability_slow = (float)Config::getInstance()->get("chicken.probability.slow")*100;
+    static const int probability_medium = (float)Config::getInstance()->get("chicken.probability.medium")*100;
     timerGenerate.setOnTimeout([&]()
         {
             for (int i = 0; i < numPerGen; i++)
             {
                 int val = rand() % 100;
                 Chicken* chicken = nullptr;
-                if (val < 50)     //50%
+                if (val < probability_slow)
                     chicken = new ChickenSlow();
-                else if (val < 80) //30%
+                else if (val < probability_medium + probability_slow)
                     chicken = new ChickenMedium();
-                else    //20%
+                else
                     chicken = new ChickenFast();
 
                 chickens.push_back(chicken);
             }
         });
     timerIncreaseNumPerGen.setOneShot(false);
-    timerIncreaseNumPerGen.setWaitTime(8.0f);
+    timerIncreaseNumPerGen.setWaitTime(Config::getInstance()->get("chicken.spawn.increase.interval"));
     timerIncreaseNumPerGen.setOnTimeout([&]()
         {
             numPerGen += 1;
@@ -178,7 +186,7 @@ void loadResources()
     soundExplosion = Mix_LoadWAV("res/explosion.wav");
     soundBoom = Mix_LoadWAV("res/boom.mp3");
 
-    font = TTF_OpenFont("res/font.ttf", 28);
+    font = TTF_OpenFont("res/font.ttf", Config::getInstance()->get("window.fontsize"));
 }
 
 
@@ -207,7 +215,7 @@ void mainLoop()
     using namespace std::chrono;
     SDL_Event event;
 
-    const nanoseconds frameDuration(1000000000 / 144);
+    const nanoseconds frameDuration(1000000000 / (int)Config::getInstance()->get("window.fps"));
     steady_clock::time_point lastTick = steady_clock::now();
     while (!isQuit)
     {
@@ -267,7 +275,7 @@ void onUpdate(float delta)
 
             const Vector2& posBullet = bullet.getPosition();
             const Vector2& posChicken = chicken->getPosition();
-            static const Vector2 sizeChicken = { 30,40 };
+            static const Vector2 sizeChicken = Config::getInstance()->get("chicken.size");
             if (posBullet.x >= posChicken.x - sizeChicken.x / 2
                 && posBullet.x <= posChicken.x + sizeChicken.x / 2
                 && posBullet.y >= posChicken.y - sizeChicken.y / 2
