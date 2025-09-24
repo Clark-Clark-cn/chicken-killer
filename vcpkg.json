@@ -5,8 +5,11 @@
     "sdl2-image",
     {
       "name": "sdl2-mixer",
-      "features": ["mpg123"]
+      "features": [
+        "mpg123"
+      ]
     },
     "sdl2-ttf"
-  ]
+  ],
+  "builtin-baseline": "8a48867e546b27969f7e1f4a81dcbeecfb4114b9"
 }

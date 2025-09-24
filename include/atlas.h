@@ -3,6 +3,7 @@
 #include <SDL_image.h>
 #include <vector>
 #include <string>
+#include <cstdio>
 
 class Atlas
 
@@ -19,7 +20,7 @@ public:
         for (int i = 0; i < num; i++)
         {
             char path_file[256];
-            sprintf_s(path_file, path_template, i + 1);
+            std::snprintf(path_file, sizeof(path_file), path_template, i + 1);
             SDL_Texture* texture = IMG_LoadTexture(renderer, path_file);
             tex_list.push_back(texture);
         }
@@ -29,7 +30,7 @@ public:
         for (int i = 0; i < num; i++)
         {
             char path_file[256];
-            sprintf_s(path_file, path_template.c_str(), i + 1);
+            std::snprintf(path_file, sizeof(path_file), path_template.c_str(), i + 1);
             SDL_Texture* texture = IMG_LoadTexture(SDL_GetRenderer(SDL_GetWindowFromID(1)), path_file);
             tex_list.push_back(texture);
         }

@@ -3,7 +3,7 @@
 #include <string>
 #include <SDL.h>
 #include <unordered_map>
-#include "Vector2.h"
+#include "vector2.h"
 
 class ConfigItem;
 
