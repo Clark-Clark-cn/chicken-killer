@@ -12,7 +12,7 @@ class ConfigItem{
 public:
     std::string value;
     ConfigItem() : value("0") {}
-    ConfigItem(const std::string& value) : value(value) {}
+    ConfigItem(const char* value) : value(value) {}
     ConfigItem(int value) : value(std::to_string(value)) {}
     ConfigItem(float value) : value(std::to_string(value)) {}
     ConfigItem(bool value) : value(value ? "true" : "false") {}
@@ -31,7 +31,7 @@ public:
         }
         key = str.substr(0, pos);
         std::string value = str.substr(pos + 1);
-        return ConfigItem(value);
+        return ConfigItem(value.c_str());
     }
 
     std::string asString() const { return value; }

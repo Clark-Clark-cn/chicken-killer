@@ -1,6 +1,7 @@
 #pragma once
 #include "vector2.h"
 #include <vector>
+#include <algorithm>
 #include <SDL2/SDL.h>
 #include <SDL2/SDL_image.h>
 #include "camera.h"
