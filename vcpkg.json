@@ -1,6 +1,9 @@
 {
   "dependencies": [
-    "cjson",
+    {
+      "name": "cjson",
+      "version>=": "1.7.18"
+    },
     "sdl2",
     "sdl2-image",
     {

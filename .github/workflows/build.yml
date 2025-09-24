@@ -147,9 +147,7 @@ jobs:
       - name: Update vcpkg
         if: runner.os != 'Windows'
         run: |
-          cd /usr/local/share/vcpkg
-          sudo git fetch --all --tags
-          sudo git pull
+          sudo git -C /usr/local/share/vcpkg fetch --all --tags
       - name: install Ninja
         if: runner.os == 'Windows'
         run: |
